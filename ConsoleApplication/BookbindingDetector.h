@@ -15,24 +15,37 @@ using namespace cv;
 #define None -100
 #endif
 
+#ifndef False
+#define False 0
+#endif
+
+#ifndef True
+#define True 0
+#endif
+
+#define MISS_COLOR Vec3b(255, 0, 255)
+#define ABNORMAL_COLOR Vec3b(0, 0, 255)
+#define NORMAL_COLOR Vec3b(0, 255, 0)
+#define WHITE_COLOR Vec3b(255, 255, 255)
+#define BLACK_COLOR Vec3b(0, 0, 0)
+
 
 typedef struct Globals
 {
-	bool save_result;
+	bool wait_key;
 	bool show_process;
-	bool show_result;
-	bool insert_pause;
-	String predict_file;
+	String in_folder;
+	String out_folder;
+	String mask_file;
 }Globals;
 
 typedef struct Thresholds
 {
-	float threshold1;
-	float threshold2;
-	float threshold3;
-	float threshold4;
-	float threshold5;
-	float threshold6;
+	float binary_threshold;
+	float max_difference_ratio;
+	float ignore_left_right_ratio;
+	float ignore_top_bottom_ratio;
+	float min_nonzero_pixel_ratio;
 }Thresholds;
 
 typedef struct IndexRange
@@ -41,6 +54,12 @@ typedef struct IndexRange
 	int end;
 	int length;
 }IndexRange;
+
+typedef struct Shape
+{
+	int width;
+	int height;
+}Shape;
 
 static Globals _Globals;
 static Thresholds _Thresholds;
