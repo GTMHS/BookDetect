@@ -6,7 +6,7 @@ void default_globals()
 	_Globals.show_process = true;
 	_Globals.in_folder = "";
 	_Globals.out_folder = "";
-	_Globals.mask_file = "";
+	_Globals.mask_file = "ws.png";
 }
 
 void default_thresholds()
@@ -62,7 +62,7 @@ Mat process_mask(Mat mask)
 	Rect rect = boundingRect(mask);
 	Mat ret = Mat::zeros(rect.height, rect.width, mask.type());
 
-	if (mask.channels == 1){
+	if (mask.channels() == 1){
 		for (int i = 0; i < rect.height; i++)
 		{
 			for (int j = 0; j < rect.width; j++)
@@ -72,7 +72,7 @@ Mat process_mask(Mat mask)
 		}
 
 	}
-	else if (mask.channels == 3)
+	else if (mask.channels() == 3)
 	{
 		for (int i = 0; i < rect.height; i++)
 		{
@@ -133,7 +133,7 @@ void draw_contours(Mat color_img, vector<vector<Point>> contours, Vec3b color = 
 		if (show_index)
 		{
 			char s[100];
-			itoa(i, s, 10);
+			_itoa(i, s, 10);
 			__draw_text(color_img, s, contour);
 		}
 	}
@@ -280,7 +280,7 @@ Mat grabcut(String filename, Rect rect)
 Mat to_gray(Mat img)
 {
 	Mat ret;
-	if (img.channels == 3){
+	if (img.channels() == 3){
 		cvtColor(img, ret, COLOR_BGR2GRAY);
 	}
 	else{
@@ -295,7 +295,7 @@ Mat extract_image_by_rect(Mat img, Rect rect, int left_offset = 0, int right_off
 	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
 	int new_h = h + bottom_offset - top_offset, new_w = w + right_offset - left_offset;
 	Mat ret = Mat::zeros(new_h, new_w, img.type());
-	if (img.channels == 1){
+	if (img.channels() == 1){
 		for (int i = 0; i < new_h; i++){
 			for (int j = 0; j < new_w; j++){
 				ret.ptr(i)[j] = img.ptr(i + y + top_offset)[x + left_offset + j];
@@ -303,7 +303,7 @@ Mat extract_image_by_rect(Mat img, Rect rect, int left_offset = 0, int right_off
 		}
 
 	}
-	else if (img.channels == 3)
+	else if (img.channels() == 3)
 	{
 		for (int i = 0; i < new_h; i++){
 			for (int j = 0; j < new_w; j++){
@@ -655,7 +655,7 @@ vector<Rect> detect_if_abnormal_of_left_image(Mat left_image, vector<Rect> match
 vector<Rect> find_mask_rects(Mat mask)
 {
 	Mat cloned;
-	if (cloned.channels == 3){
+	if (cloned.channels() == 3){
 		cvtColor(mask, cloned, COLOR_BGR2GRAY);
 	}
 	else{
@@ -672,13 +672,180 @@ vector<Rect> find_mask_rects(Mat mask)
 	return ret;
 }
 
+//match with target
+Rect mask_matches_target(Mat mask, Mat target) {
+	int h = mask.rows, w = mask.cols;
+	Mat draw_img = make_draw_img(target);
+	CvScalar best_match_color = cvScalar(0, 255, 0);
+	CvScalar worst_match_color = cvScalar(0, 0, 255);
+	Mat result = match_with_template(target, mask);
+	double min_val, max_val;
+	CvPoint min_loc, max_loc;
+	cvMinMaxLoc(&result, &min_val, &max_val, &min_loc, &max_loc);
+	// print(min_val, max_val, min_loc, max_loc)
+	// best match, green
+	CvScalar color = best_match_color;
+	int line_width = 1;
+	draw_rect(draw_img, min_loc.x, min_loc.y, w, h, color, line_width);
+	// worst match, red
+	color = worst_match_color;
+	draw_rect(draw_img, max_loc.x, max_loc.y, w, h, color, line_width);
+	// show image
+	show_image(draw_img, "match mask with target", True);
+
+	Rect rect;
+	rect.x = min_loc.x;
+	rect.y = min_loc.y;
+	rect.width = w;
+	rect.height = h;
+	return rect;
+}
+
+Mat fill_rect_bound(Mat gray, Rect rect, int color = 255){									////////////////////////////////
+	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
+	int gray_h = gray.rows, gray_w = gray.cols;
+	int mx = x + w;
+	int my = y + h;
+	mx = mx > gray_w ? gray_w : mx;
+	my = my > gray_h ? gray_h : my;
+
+	for (int i = x; i < mx; i++)
+	{
+		gray.ptr(y)[i] = color;
+	}
+
+	for (int i = y; i < my; i++)
+	{
+		gray.ptr(i)[x] = color;
+	}
+
+	if (mx == gray_w)
+	{
+		for (int i = y; i < my; i++)
+		{
+			gray.ptr(i)[mx - 1] = color;
+		}
+	}
+	else
+	{
+		for (int i = y; i < my; i++)
+		{
+			gray.ptr(i)[mx] = color;
+		}
+	}
+
+	if (my == gray_h)
+	{
+		for (int i = x; i < mx; i++)
+		{
+			gray.ptr(my - 1)[i] = color;
+		}
+	}
+	else
+	{
+		for (int i = x; i < mx; i++)
+		{
+			gray.ptr(my)[i] = color;
+		}
+	}
+	return gray;
+}
+
+Mat clip_target(Mat target, Rect rect) {
+	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
+	Mat ret = Mat::zeros(h, w, target.type());
+	for (int i = 0; i < h; i++)
+	{
+		for (int j = 0; j < w; j++)
+		{
+			ret.ptr(i)[j] = target.ptr(i + y)[j + x];
+		}
+	}
+	return ret;
+}
+
+
 void process_main_part(string infile, string maskfile,
 	int left_offset = -5, int right_offset = 5,
-	int top_offset = -5, int bottom_offset = 5)
+	int top_offset = -5, int bottom_offset = 5, 
+	vector<Rect> *_template_rects = 0,
+	vector<Rect> *_matched_rects = 0,
+	int *_miss_flag = 0,
+	vector<Rect> *_miss_rects = 0,
+	Mat *_left_target = 0,
+	Mat *_for_draw_result = 0,
+	Rect *_best_match_rect = 0,
+	Rect *_target_rect = 0)
 {
-	//TODO
-	Mat clip_target2, processed_mask, target2;
-	Rect best_match_rect;
+	//read mask
+	Mat mask = read_mask(maskfile, 1);
+	show_image(mask, "mask", True);
+	Shape mask_shape = { mask.cols, mask.rows };														//				
+
+	//process mask
+	Mat processed_mask = process_mask(mask);
+	show_image(processed_mask, "processed mask", True);
+
+	//read color image
+	Mat color_img = read_image(infile, 1);
+	show_image(color_img, "origin", True);
+	Mat gray_img;
+	cvtColor(color_img, gray_img, CV_BGR2GRAY);
+	//find contour
+	vector<Point> contour = extract_best_match_contour(gray_img, mask_shape);
+	//get rect
+	Rect target_rect = get_contour_rect(contour);
+	//grabcut
+	Mat grabcut_result = grabcut(infile, target_rect);
+	show_image(grabcut_result, "grabcut result", True);
+	// clip
+	Mat clip_grabcut = extract_image_by_rect(grabcut_result, target_rect,
+		left_offset = left_offset, right_offset = right_offset,
+		top_offset = top_offset, bottom_offset = bottom_offset);
+	show_image(clip_grabcut, "clip result", True);
+	Mat for_draw_result = clip_grabcut.clone();											//1607
+
+	threshold(clip_grabcut, clip_grabcut,
+		100, 255, THRESH_TOZERO);
+	show_image(clip_grabcut, "clip result 2", True);
+
+
+	for (int j = 0; j < clip_grabcut.rows; j++){
+		for (int k = 0; k < clip_grabcut.cols; k++){
+			if (clip_grabcut.ptr(j)[k] > 0)
+				clip_grabcut.ptr(j)[k] = 255;
+		}
+	}
+
+	//clip_grabcut[clip_grabcut > 0] = 255;												//
+
+	//clone for draw rect
+	Mat clone_clip_grabcut = clip_grabcut.clone();
+
+	show_image(clip_grabcut, "clip result 3", True);
+
+	//fill 4 corners
+	CvScalar color = cvScalar(255, 255, 255);
+	Mat filled_img = fill_4corners(clip_grabcut, top_offset = 0, bottom_offset = 0, color, 10);
+	show_image(filled_img, "filled 4 corners", True);
+
+	//extract target
+	Mat target = extract_target(filled_img);
+	show_image(target, "target", True);
+
+	Rect best_match_rect = mask_matches_target(processed_mask, target);
+
+	clone_clip_grabcut = fill_rect_bound(clone_clip_grabcut, best_match_rect);
+	show_image(clone_clip_grabcut, "clone clip grabcut", True);
+
+	clone_clip_grabcut = fill_4corners(clone_clip_grabcut, 0, 0, cvScalar(255, 255, 255));
+	show_image(clone_clip_grabcut, "clone clip grabcut 2", True);
+
+	Mat target2 = extract_target(clone_clip_grabcut);
+	show_image(target2, "target2", True);
+
+	Mat clip_target2 = clip_target(target2, best_match_rect);
+	show_image(clip_target2, "clip target2", True);
 
 	Mat draw_img = make_draw_img(clip_target2);
 	int bx = best_match_rect.x, by = best_match_rect.y, bw = best_match_rect.width, bh = best_match_rect.height;
@@ -688,7 +855,7 @@ void process_main_part(string infile, string maskfile,
 	const int size = rects.size();
 	int x, y, w, h;
 	CvScalar draw_color;
-	Mat mask;
+	Mat _mask;
 	for (int i = 0; i < size; i++){
 		Rect rect = rects[i];
 		template_rects.push_back(rect);
@@ -715,7 +882,7 @@ void process_main_part(string infile, string maskfile,
 					target2.ptr(j)[k] = 255;
 				}
 			}
-			target2 = fill_seed(target2, Point(x + bx, y + by), cvScalar(0, 0, 0), &mask);
+			target2 = fill_seed(target2, Point(x + bx, y + by), cvScalar(0, 0, 0), &_mask);
 			show_image(target2, "target2", True);
 		}
 		else{
@@ -727,7 +894,15 @@ void process_main_part(string infile, string maskfile,
 		show_image(draw_img, "draw_img", True);
 	}
 	Mat left_target = target2.clone();
-	//TODO
+
+	*_template_rects = template_rects;
+	*_matched_rects = matched_rects;
+	*_miss_flag = miss_flag;
+	*_miss_rects = miss_rects;
+	*_left_target = left_target;
+	*_for_draw_result = for_draw_result;
+	*_best_match_rect = best_match_rect;
+	*_target_rect = target_rect;
 }
 
 bool make_decision(bool miss_flag, vector<Rect> left_rect)
@@ -818,12 +993,25 @@ bool run(string infile, string outfile="", string mask = "")
 		right_offset = 5,
 		top_offset = -5,
 		bottom_offset = 5;
+
+	if (mask == "")
+	{
+		mask = _Globals.mask_file;
+	}
+	
 	//TODO
-	//process_main_part
-	vector<Rect> template_rects, matched_rects, miss_rects;
-	bool miss_flag;
-	Mat left_target, for_draw_result;
-	Rect best_match_rect, target_rect;
+	vector<Rect> template_rects;
+	vector<Rect> matched_rects;
+	int miss_flag;
+	vector<Rect> miss_rects;
+	Mat left_target;
+	Mat for_draw_result;
+	Rect best_match_rect;
+	Rect target_rect;
+
+	process_main_part(infile, mask, left_offset, right_offset, top_offset, bottom_offset,
+		&template_rects, &matched_rects, &miss_flag, &miss_rects, &left_target,
+		&for_draw_result, &best_match_rect, &target_rect);
 
 	Mat left_img, left_draw_img;
 
@@ -888,21 +1076,37 @@ void get_files(string path, vector<string>& files)
 	}
 }
 
-vector<int> bookbingDetector()
+int _bookbingDetector(String filename)
 {
-	vector<string> files;
-	get_files(INPUT_FOLDER, files);
-
-	int count = files.size();
-	vector<int> result;
-	for (int i = 0; i < count; i++)
-	{
-		result.push_back(bookbingDetector_file(files.at(i)));
-	}
-	return result;
+	int ret = -1;
+	ret = run(filename);
+	//try
+	//{
+	//	ret = run(filename);
+	//}
+	//catch (Exception e)
+	//{
+	//	std::cout << e.msg;
+	//	;
+	//}
+	return ret;
 }
 
-int bookbingDetector_file(String filename)
-{
-	return _bookbingDetector(filename, _Globals, _Thresholds);
-}
+//vector<int> bookbingDetector()
+//{
+//	vector<string> files;
+//	get_files(INPUT_FOLDER, files);
+//
+//	int count = files.size();
+//	vector<int> result;
+//	for (int i = 0; i < count; i++)
+//	{
+//		result.push_back(bookbingDetector_file(files.at(i)));
+//	}
+//	return result;
+//}
+//
+//int bookbingDetector_file(String filename)
+//{
+//	return _bookbingDetector(filename, _Globals, _Thresholds);
+//}

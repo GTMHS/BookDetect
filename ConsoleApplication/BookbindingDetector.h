@@ -69,6 +69,6 @@ static Thresholds _Thresholds;
 void default_globals();
 void default_thresholds();
 
-int _bookbingDetector(String filename, Globals global, Thresholds thresholds);
-vector<int> bookbingDetector();
-int bookbingDetector_file(String filename);
+int _bookbingDetector(String filename);
+//vector<int> bookbingDetector();
+//int bookbingDetector_file(String filename);
