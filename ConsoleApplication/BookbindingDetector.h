@@ -20,7 +20,7 @@ using namespace cv;
 #endif
 
 #ifndef True
-#define True 0
+#define True 1
 #endif
 
 #define MISS_COLOR Vec3b(255, 0, 255)
@@ -72,3 +72,6 @@ void default_thresholds();
 int _bookbingDetector(String filename);
 //vector<int> bookbingDetector();
 //int bookbingDetector_file(String filename);
+
+Mat to_gray(Mat img);
+vector<vector<Point> > extract_contours(Mat binary_img);

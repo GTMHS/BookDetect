@@ -2,8 +2,8 @@
 
 void default_globals()
 {
-	_Globals.wait_key = true;
-	_Globals.show_process = true;
+	_Globals.wait_key = True;
+	_Globals.show_process = True;
 	_Globals.in_folder = "";
 	_Globals.out_folder = "";
 	_Globals.mask_file = "ws.png";
@@ -34,7 +34,7 @@ Mat read_mask(String maskfile, int channels = 3)
 		{
 			for (int j = 0; j < height; j++)
 			{
-				if (mask.ptr(j)[i * 3 + 3] > 0){
+				if (mask.ptr(j)[i * 3 + 0] > 0){
 					mask2.at<Vec3b>(j, i) = WHITE_COLOR;
 				}
 			}
@@ -48,7 +48,7 @@ Mat read_mask(String maskfile, int channels = 3)
 		{
 			for (int j = 0; j < height; j++)
 			{
-				if (mask.ptr(j)[i * 3 + 3] > 0){
+				if (mask.ptr(j)[i * 3 + 0] > 0){
 					mask2.ptr(j)[i] = 255;
 				}
 			}
@@ -57,9 +57,78 @@ Mat read_mask(String maskfile, int channels = 3)
 	return mask2;
 }
 
+Rect mask_boundingRect(Mat mask)
+{
+	int j, k;
+	int start_w, end_w;
+	int start_h, end_h;
+
+	for (j = 0; j < mask.rows; j++){
+		// top, start_h
+		bool flag = False;
+		for (k = 0; k < mask.cols; k++){
+			if (mask.ptr(j)[k] > 0){
+				flag = True;
+				break;
+			}
+		}
+		if (flag) break;
+	}
+	start_h = j;
+
+	for (j = mask.rows - 1; j > start_h; j--){
+		// bottom, end_h
+		bool flag = False;
+		for (k = 0; k < mask.cols; k++){
+			if (mask.ptr(j)[k] > 0){
+				flag = True;
+				break;
+			}
+		}
+		if (flag) break;
+	}
+	end_h = j;
+
+	for (j = 0; j < mask.cols; j++){
+		// left, start_w
+		bool flag = False;
+		for (k = 0; k < mask.rows; k++){
+			if (mask.ptr(k)[j] > 0){
+				flag = True;
+				break;
+			}
+		}
+		if (flag) break;
+	}
+	start_w = j;
+
+	for (j = mask.cols - 1; j > start_w; j--){
+		// left, start_w
+		bool flag = False;
+		for (k = 0; k < mask.rows; k++){
+			if (mask.ptr(k)[j] > 0){
+				flag = True;
+				break;
+			}
+		}
+		if (flag) break;
+	}
+
+	end_w = j;
+	Rect rect;
+	rect.x = start_w;
+	rect.y = start_h;
+	rect.width = end_w - start_w + 1;
+	rect.height = end_h - start_h + 1;
+
+	return rect;
+}
+
 Mat process_mask(Mat mask)
 {
-	Rect rect = boundingRect(mask);
+	//Mat gray_mask = to_gray(mask);
+	//Rect rect = boundingRect(mask);
+	Rect rect = mask_boundingRect(mask);
 	Mat ret = Mat::zeros(rect.height, rect.width, mask.type());
 
 	if (mask.channels() == 1){
@@ -67,7 +136,7 @@ Mat process_mask(Mat mask)
 		{
 			for (int j = 0; j < rect.width; j++)
 			{
-				ret.ptr(i)[j] = mask.ptr(i)[j];
+				ret.ptr(i)[j] = mask.ptr(i + rect.y)[j + rect.x];
 			}
 		}
 
@@ -105,10 +174,12 @@ void __draw_text(Mat color_image, String text, vector<Point> contour)
 	draw_text(color_image, text, pos);
 }
 
-void draw_contour(Mat color_img, vector<Point> contour, Vec3b color, String text = "", bool filled = True)
+void draw_contour(Mat color_img, vector<Point> contour, CvScalar color, String text = "", bool filled = True)
 {
 	int flag = filled ? 3 : 1;
-	drawContours(color_img, contour, -1, cvScalar(color[0], color[1], color[2]), flag);
+	vector<vector<Point>> contours;
+	contours.push_back(contour);
+	drawContours(color_img, contours, 0, color, flag);
 	if (text != ""){
 		Rect rect = boundingRect(contour);
 		Point pos = Point(rect.x, rect.y + rect.height + 50);
@@ -440,8 +511,8 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 		}
 		Mat result = match_with_template(gray_img, template_);
 		double min_val, max_val;
-		CvPoint min_loc, max_loc;
-		cvMinMaxLoc(&result, &min_val, &max_val, &min_loc, &max_loc);
+		Point min_loc, max_loc;
+		minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
 
 		int sum = 0;
 
@@ -474,6 +545,7 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 		//width = where[1].max() - where[1].min() + 1
 		//height = where[0].max() - where[0].min() + 1
 
+		//TODO replace
 		int j, k;
 		int start_w, end_w;
 		int start_h, end_h;
@@ -666,7 +738,7 @@ vector<Rect> find_mask_rects(Mat mask)
 	vector<Rect> ret;
 	const int size = contours.size();
 	for (int i = 0; i < size; i++){
-		Rect rect = boundingRect(cloned);
+		Rect rect = boundingRect(contours[i]);
 		ret.push_back(rect);
 	}
 	return ret;
@@ -680,8 +752,8 @@ Rect mask_matches_target(Mat mask, Mat target) {
 	CvScalar worst_match_color = cvScalar(0, 0, 255);
 	Mat result = match_with_template(target, mask);
 	double min_val, max_val;
-	CvPoint min_loc, max_loc;
-	cvMinMaxLoc(&result, &min_val, &max_val, &min_loc, &max_loc);
+	Point min_loc, max_loc;
+	minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
 	// print(min_val, max_val, min_loc, max_loc)
 	// best match, green
 	CvScalar color = best_match_color;
