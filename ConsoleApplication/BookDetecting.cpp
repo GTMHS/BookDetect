@@ -1,12 +1,24 @@
-#include "BookbindingDetector.h"
+#include "BookDetecting.h"
+
+#define MISS_COLOR Vec3b(255, 0, 255)
+#define ABNORMAL_COLOR Vec3b(0, 0, 255)
+#define NORMAL_COLOR Vec3b(0, 255, 0)
+#define WHITE_COLOR Vec3b(255, 255, 255)
+#define BLACK_COLOR Vec3b(0, 0, 0)
+
+typedef struct Shape
+{
+	int width;
+	int height;
+}Shape;
 
 void default_globals()
 {
-	_Globals.wait_key = True;
-	_Globals.show_process = True;
+	_Globals.wait_key = False;
+	_Globals.show_process = False;
 	_Globals.in_folder = "";
 	_Globals.out_folder = "";
-	_Globals.mask_file = "ws.png";
+	_Globals.mask_file = "";
 }
 
 void default_thresholds()
@@ -16,6 +28,26 @@ void default_thresholds()
 	_Thresholds.ignore_left_right_ratio = 0.15;
 	_Thresholds.ignore_top_bottom_ratio = 0.2;
 	_Thresholds.min_nonzero_pixel_ratio = 0.5;
+}
+
+Mat to_gray(Mat img)
+{
+	Mat ret;
+	if (img.channels() == 3){
+		cvtColor(img, ret, COLOR_BGR2GRAY);
+	}
+	else{
+		ret = img.clone();
+	}
+	return ret;
+}
+
+vector<vector<Point> > extract_contours(Mat binary_img)
+{
+	vector<vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+	findContours(binary_img, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+	return contours;
 }
 
 Mat read_mask(String maskfile, int channels = 3)
@@ -152,14 +184,6 @@ Mat process_mask(Mat mask)
 		}
 	}
 	return ret;
-}
-
-vector<vector<Point> > extract_contours(Mat binary_img)
-{
-	vector<vector<Point> > contours;
-	vector<Vec4i> hierarchy;
-	findContours(binary_img, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
-	return contours;
 }
 
 void draw_text(Mat image, String text, Point pos)
@@ -346,18 +370,6 @@ Mat grabcut(String filename, Rect rect)
 	Mat foreGround(img.size(), CV_8UC3, cv::Scalar(0, 0, 0));
 	img.copyTo(foreGround, result);
 	return foreGround;
-}
-
-Mat to_gray(Mat img)
-{
-	Mat ret;
-	if (img.channels() == 3){
-		cvtColor(img, ret, COLOR_BGR2GRAY);
-	}
-	else{
-		ret = img.clone();
-	}
-	return ret;
 }
 
 Mat extract_image_by_rect(Mat img, Rect rect, int left_offset = 0, int right_offset = 0,
@@ -1059,19 +1071,13 @@ void draw_on_origin(Mat image, vector<Rect> matched_rects, vector<Rect> miss_rec
 	draw_decision_text(image, decision);
 }
 
-bool run(string infile, string outfile="", string mask = "")
+bool run(string infile, string mask,string outfile = "")
 {
 	int left_offset = -5,
 		right_offset = 5,
 		top_offset = -5,
 		bottom_offset = 5;
 
-	if (mask == "")
-	{
-		mask = _Globals.mask_file;
-	}
-	
-	//TODO
 	vector<Rect> template_rects;
 	vector<Rect> matched_rects;
 	int miss_flag;
@@ -1117,6 +1123,10 @@ bool run(string infile, string outfile="", string mask = "")
 		write_image(origin_image, outfile);
 	}
 
+	if (_Globals.show_process){
+		destroyAllWindows();
+	}
+
 	return decision;
 }
 
@@ -1148,37 +1158,33 @@ void get_files(string path, vector<string>& files)
 	}
 }
 
-int _bookbingDetector(String filename)
+int bookDetecting(string filename, string maskfile, string outfile, bool verbose, bool timing, double *time_ms)
 {
+	//初始化计时
+	LARGE_INTEGER  freq_num;
+	long long start_time, end_time, freq;
+	if (timing){
+		QueryPerformanceFrequency(&freq_num);
+		freq = freq_num.QuadPart;
+		QueryPerformanceCounter(&freq_num);
+		start_time = freq_num.QuadPart;
+	}
+
 	int ret = -1;
-	ret = run(filename);
-	//try
-	//{
-	//	ret = run(filename);
-	//}
-	//catch (Exception e)
-	//{
-	//	std::cout << e.msg;
-	//	;
-	//}
+	try
+	{
+		ret = run(filename, maskfile, outfile);
+	}
+	catch (Exception e)
+	{
+		if (verbose)
+			std::cout << e.what();
+	}
+
+	if (timing){
+		QueryPerformanceCounter(&freq_num);
+		end_time = freq_num.QuadPart;
+		*time_ms =  (end_time - start_time) * 1000 / (freq *  1.0);
+	}
 	return ret;
 }
-
-//vector<int> bookbingDetector()
-//{
-//	vector<string> files;
-//	get_files(INPUT_FOLDER, files);
-//
-//	int count = files.size();
-//	vector<int> result;
-//	for (int i = 0; i < count; i++)
-//	{
-//		result.push_back(bookbingDetector_file(files.at(i)));
-//	}
-//	return result;
-//}
-//
-//int bookbingDetector_file(String filename)
-//{
-//	return _bookbingDetector(filename, _Globals, _Thresholds);
-//}
