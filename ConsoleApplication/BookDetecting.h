@@ -8,6 +8,8 @@
 
 #include <io.h>
 
+#include "myexception.h"
+
 using namespace std;
 using namespace cv;
 
@@ -47,6 +49,10 @@ void default_globals();
 
 // 默认阈值
 void default_thresholds();
+
+//重定向opencv的错误输出
+int cvErrorRedirector(int status, const char* func_name, const char* err_msg,
+	const char* file_name, int line, void* userdata);
 
 /*
  * @brief 图书检测算法

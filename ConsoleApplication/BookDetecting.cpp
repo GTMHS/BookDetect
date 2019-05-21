@@ -30,13 +30,18 @@ void default_thresholds()
 	_Thresholds.min_nonzero_pixel_ratio = 0.5;
 }
 
+int cvErrorRedirector(int status, const char * func_name, const char * err_msg, const char * file_name, int line, void * userdata)
+{
+	return 1;
+}
+
 Mat to_gray(Mat img)
 {
 	Mat ret;
-	if (img.channels() == 3){
+	if (img.channels() == 3) {
 		cvtColor(img, ret, COLOR_BGR2GRAY);
 	}
-	else{
+	else {
 		ret = img.clone();
 	}
 	return ret;
@@ -46,14 +51,24 @@ vector<vector<Point> > extract_contours(Mat binary_img)
 {
 	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
-	findContours(binary_img, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+	try
+	{
+		findContours(binary_img, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("findContours", 56);
+	}
 	return contours;
 }
 
 Mat read_mask(String maskfile, int channels = 3)
 {
 	Mat mask = imread(maskfile);
-
+	if (mask.empty())
+	{
+		throw MyException("imread", 67, "Mask is empty");
+	}
 	Mat mask2;
 
 	const int height = mask.rows;
@@ -188,7 +203,14 @@ Mat process_mask(Mat mask)
 
 void draw_text(Mat image, String text, Point pos)
 {
-	putText(image, String(text), pos, FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2);
+	try
+	{
+		putText(image, String(text), pos, FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("putText", 208);
+	}
 }
 
 void __draw_text(Mat color_image, String text, vector<Point> contour)
@@ -203,7 +225,14 @@ void draw_contour(Mat color_img, vector<Point> contour, CvScalar color, String t
 	int flag = filled ? 3 : 1;
 	vector<vector<Point>> contours;
 	contours.push_back(contour);
-	drawContours(color_img, contours, 0, color, flag);
+	try
+	{
+		drawContours(color_img, contours, 0, color, flag);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("drawContours", 230);
+	}
 	if (text != ""){
 		Rect rect = boundingRect(contour);
 		Point pos = Point(rect.x, rect.y + rect.height + 50);
@@ -271,13 +300,28 @@ void show_mask(string filename)
 
 Mat read_image(string infile, int color_mode = 0)
 {
-	Mat img = imread(infile, color_mode);
+	Mat img;
+	try
+	{
+		img = imread(infile, color_mode);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("imread", 306);
+	}
 	return img;
 }
 
 void write_image(Mat img, string outfile)
 {
-	imwrite(outfile, img);
+	try
+	{
+		imwrite(outfile, img);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("imwrite", 319);
+	}
 }
 
 Mat denoise_2d(Mat img, int color = 255)
@@ -306,8 +350,15 @@ double __match_contour(vector<Point> contour, Shape mask_shape)
 	double x = rect.x * 1.0, y = rect.y * 1.0, w = rect.width * 1.0, h = rect.height * 1.0;
 	double tw = mask_shape.width * 1.0, th = mask_shape.height * 1.0;
 	double value = 0.0;
-	value = (pow((w - tw), 2) + pow((h - th), 2) + pow((w * h - tw * th), 2)) /
-		(pow(tw, 2) + pow(th, 2) + pow((tw * th), 2));
+	try
+	{
+		value = (pow((w - tw), 2) + pow((h - th), 2) + pow((w * h - tw * th), 2)) /
+			(pow(tw, 2) + pow(th, 2) + pow((tw * th), 2));
+	}
+	catch (Exception &e)
+	{
+		throw MyException("__match_contour", 355);
+	}
 	return value;
 }
 
@@ -339,13 +390,34 @@ vector<Point> find_max_contour(vector<vector<Point>> contours, Shape mask_shape,
 vector<Point> extract_best_match_contour(Mat img, Shape mask_shape)
 {
 	Mat thresh3;
-	threshold(img, thresh3, 127, 255, THRESH_TRUNC);
+	try
+	{
+		threshold(img, thresh3, 127, 255, THRESH_TRUNC);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("threshold", 395);
+	}
 	Mat kernel = getStructuringElement(MORPH_RECT, Size(3, 3));
 	Mat dilated;
-	dilate(thresh3, dilated, kernel, cv::Point(-1, -1), 1);
+	try
+	{
+		dilate(thresh3, dilated, kernel, cv::Point(-1, -1), 1);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("dilate", 405);
+	}
 	Mat binary;
 	int th = int(_Thresholds.binary_threshold);
-	threshold(dilated, binary, th, 255, THRESH_BINARY);
+	try
+	{
+		threshold(dilated, binary, th, 255, THRESH_BINARY);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("dilate", 415);
+	}
 	show_image(binary, "dilate", True);
 	binary = denoise_2d(binary, 0);
 	show_image(binary, "denoised binary", True);
@@ -357,7 +429,16 @@ vector<Point> extract_best_match_contour(Mat img, Shape mask_shape)
 
 Rect get_contour_rect(vector<Point> contour)
 {
-	return boundingRect(contour);
+	Rect rect;
+	try
+	{
+		rect = boundingRect(contour);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("boundingRect", 435);
+	}
+	return rect;
 }
 
 Mat grabcut(String filename, Rect rect)
@@ -365,7 +446,14 @@ Mat grabcut(String filename, Rect rect)
 	Mat img = imread(filename, 1);
 	Mat bgModel, fgModel;
 	Mat result;
-	grabCut(img, result, rect, bgModel, fgModel, 1, GC_INIT_WITH_RECT);
+	try
+	{
+		grabCut(img, result, rect, bgModel, fgModel, 1, GC_INIT_WITH_RECT);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("grabCut", 451);
+	}
 	result = result & 1;
 	Mat foreGround(img.size(), CV_8UC3, cv::Scalar(0, 0, 0));
 	img.copyTo(foreGround, result);
@@ -407,7 +495,14 @@ Mat fill_seed(Mat img, Point seed, CvScalar color, Mat *_mask, int threshold = 1
 	int floodflags = 4;
 	floodflags |= FLOODFILL_FIXED_RANGE;
 	floodflags |= (255 << 8);
-	floodFill(img, seed, color, &rect, Scalar(0, 0, 0), Scalar(threshold, threshold, threshold), floodflags);
+	try
+	{
+		floodFill(img, seed, color, &rect, Scalar(0, 0, 0), Scalar(threshold, threshold, threshold), floodflags);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("floodFill", 500);
+	}
 	*_mask = mask;
 	return img;
 }
@@ -430,14 +525,28 @@ Mat extract_target(Mat img)
 {
 	Mat gray_img = to_gray(img);
 	Mat thresh;
-	threshold(gray_img, thresh, 1, 255, THRESH_BINARY_INV);
+	try
+	{
+		threshold(gray_img, thresh, 1, 255, THRESH_BINARY_INV);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("threshold", 530);
+	}
 	return thresh;
 }
 
 void draw_rect(Mat img, int x, int y, int w, int h, CvScalar color = cvScalar(255, 0, 0),
 	int line_width = 1, string text = "")
 {
-	rectangle(img, Point(x, y), Point(x + w - 1, y + h - 1), color, line_width);
+	try
+	{
+		rectangle(img, Point(x, y), Point(x + w - 1, y + h - 1), color, line_width);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("rectangle", 544);
+	}
 	if (text != ""){
 		Point pos = Point(x, y + h + 30);
 		putText(img, text, pos, FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2);
@@ -454,7 +563,14 @@ void draw_contour_rect(Mat img, vector<Point> contour, CvScalar color, int line_
 Mat match_with_template(Mat img, Mat _template, int method = TM_SQDIFF)
 {
 	Mat result;
-	matchTemplate(img, _template, result, method);
+	try
+	{
+		matchTemplate(img, _template, result, method);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("matchTemplate", 568);
+	}
 	return result;
 }
 
@@ -477,6 +593,10 @@ void find_minmax_width_and_height(vector<Rect> rects, int *minw, int *maxw,
 	int *minh, int *maxh, int *min_area, int *max_area)
 {
 	const int size = rects.size();
+	if (size == 0)
+	{
+		throw MyException("", 595, "Size of rects equals 0.");
+	}
 	std::sort(rects.begin(), rects.end(), compare_by_width);
 	*minw = rects[0].width, *maxw = rects[size - 1].width;
 
@@ -494,15 +614,22 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 	CvScalar worst_match_color = cvScalar(0, 0, 255),
 	double min_nonzero_pixel_ratio = 0.5)
 {
-	medianBlur(left_target, left_target, 3);
+	try
+	{
+		medianBlur(left_target, left_target, 3);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("medianBlur", 619);
+	}
 	Mat draw_img = make_draw_img(left_target);
 	Mat cloned_draw_img = draw_img.clone();
 	Mat gray_img = to_gray(left_target);
 	Mat mask = Mat::zeros(left_target.rows, left_target.cols, CV_8U);
 
-	int minw, maxw,
-		minh, maxh,
-		min_area_int, max_area_int;
+	int minw = 0, maxw = 0,
+		minh = 0, maxh = 0,
+		min_area_int = 0, max_area_int = 0;
 
 	find_minmax_width_and_height(matched_rects, &minw, &maxw,
 		&minh, &maxh, &min_area_int, &max_area_int);
@@ -524,8 +651,14 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 		Mat result = match_with_template(gray_img, template_);
 		double min_val, max_val;
 		Point min_loc, max_loc;
-		minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
-
+		try
+		{
+			minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
+		}
+		catch (cv::Exception &e)
+		{
+			throw MyException("minMaxLoc", 656);
+		}
 		int sum = 0;
 
 		for (int j = min_loc.y; j < min_loc.y + h; j++){
@@ -661,7 +794,14 @@ vector<Point> rect_2_vector(Rect rect)
 double match_shapes(Rect rect, Rect template_rect, int method = CV_CONTOURS_MATCH_I3)
 {
 	double value = 0.0;
-	value = matchShapes(rect_2_vector(template_rect), rect_2_vector(rect), method, 0);
+	try
+	{
+		value = matchShapes(rect_2_vector(template_rect), rect_2_vector(rect), method, 0);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("matchShapes", 799);
+	}
 	return value;
 }
 
@@ -765,7 +905,14 @@ Rect mask_matches_target(Mat mask, Mat target) {
 	Mat result = match_with_template(target, mask);
 	double min_val, max_val;
 	Point min_loc, max_loc;
-	minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
+	try
+	{
+		minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("minMaxLoc", 910);
+	}
 	// print(min_val, max_val, min_loc, max_loc)
 	// best match, green
 	CvScalar color = best_match_color;
@@ -785,7 +932,7 @@ Rect mask_matches_target(Mat mask, Mat target) {
 	return rect;
 }
 
-Mat fill_rect_bound(Mat gray, Rect rect, int color = 255){									////////////////////////////////
+Mat fill_rect_bound(Mat gray, Rect rect, int color = 255){								////////////////////////////////
 	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
 	int gray_h = gray.rows, gray_w = gray.cols;
 	int mx = x + w;
@@ -888,9 +1035,14 @@ void process_main_part(string infile, string maskfile,
 		top_offset = top_offset, bottom_offset = bottom_offset);
 	show_image(clip_grabcut, "clip result", True);
 	Mat for_draw_result = clip_grabcut.clone();											//1607
-
-	threshold(clip_grabcut, clip_grabcut,
-		100, 255, THRESH_TOZERO);
+	try
+	{
+		threshold(clip_grabcut, clip_grabcut,100, 255, THRESH_TOZERO);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("threshold", 1040);
+	}
 	show_image(clip_grabcut, "clip result 2", True);
 
 
@@ -999,7 +1151,14 @@ void draw_decision_text(Mat image, bool decision)
 {
 	String text;
 	text = decision ? "Abnormal" : "Normal";
-	putText(image, text, Point(10, 30), FONT_HERSHEY_SIMPLEX, 1.0, cvScalar(0, 0, 255), 2);
+	try
+	{
+		putText(image, text, Point(10, 30), FONT_HERSHEY_SIMPLEX, 1.0, cvScalar(0, 0, 255), 2);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("putText", 1156);
+	}
 }
 
 void draw_result(Rect best_match_rect, vector<Rect> matched_rects, vector<Rect> miss_rects,
@@ -1175,10 +1334,17 @@ int bookDetecting(string filename, string maskfile, string outfile, bool verbose
 	{
 		ret = run(filename, maskfile, outfile);
 	}
-	catch (Exception e)
+	catch (MyException &e)
 	{
 		if (verbose)
 			std::cout << e.what();
+	}
+	catch (cv::Exception &e)
+	{
+		if (verbose)
+		{
+			std::cout << e.what();
+		}
 	}
 
 	if (timing){
