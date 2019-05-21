@@ -441,9 +441,9 @@ Rect get_contour_rect(vector<Point> contour)
 	return rect;
 }
 
-Mat grabcut(String filename, Rect rect)
+Mat grabcut(Mat img, Rect rect)
 {
-	Mat img = imread(filename, 1);
+	//Mat img = imread(filename, 1);
 	Mat bgModel, fgModel;
 	Mat result;
 	try
@@ -460,29 +460,34 @@ Mat grabcut(String filename, Rect rect)
 	return foreGround;
 }
 
+Mat clip_Mat_by_rect(Mat mat, Rect rect)
+{
+	IplImage* p_img = &IplImage(mat);
+	IplImage *newImg = cvCreateImage(cvSize(rect.width, rect.height), p_img->depth, p_img->nChannels);
+	cvSetImageROI(p_img, rect);
+	cvCopy(p_img, newImg);
+	cvResetImageROI(p_img);
+	Mat temp_img = cvarrToMat(newImg);
+	Mat ret = temp_img.clone();
+	cvReleaseImage(&newImg);
+	return ret;
+}
+
 Mat extract_image_by_rect(Mat img, Rect rect, int left_offset = 0, int right_offset = 0,
 	int top_offset = 0, int bottom_offset = 0)
 {
 	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
 	int new_h = h + bottom_offset - top_offset, new_w = w + right_offset - left_offset;
-	Mat ret = Mat::zeros(new_h, new_w, img.type());
-	if (img.channels() == 1){
-		for (int i = 0; i < new_h; i++){
-			for (int j = 0; j < new_w; j++){
-				ret.ptr(i)[j] = img.ptr(i + y + top_offset)[x + left_offset + j];
-			}
-		}
+	//Mat ret = Mat::zeros(new_h, new_w, img.type());
 
-	}
-	else if (img.channels() == 3)
-	{
-		for (int i = 0; i < new_h; i++){
-			for (int j = 0; j < new_w; j++){
-				ret.at<Vec3b>(i, j) = img.at<Vec3b>(i + y + top_offset, x + left_offset + j);
-			}
-		}
-	}
+	rect.x += left_offset;
+	rect.y += top_offset;
+	rect.width = new_w;
+	rect.height = new_h;
 
+	Mat ret = clip_Mat_by_rect(img, rect);
+
+	show_image(ret, "482", True);
 	Mat ret2 = to_gray(ret);
 	return ret2;
 }
@@ -982,19 +987,6 @@ Mat fill_rect_bound(Mat gray, Rect rect, int color = 255){								//////////////
 	return gray;
 }
 
-Mat clip_target(Mat target, Rect rect) {
-	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
-	Mat ret = Mat::zeros(h, w, target.type());
-	for (int i = 0; i < h; i++)
-	{
-		for (int j = 0; j < w; j++)
-		{
-			ret.ptr(i)[j] = target.ptr(i + y)[j + x];
-		}
-	}
-	return ret;
-}
-
 
 void process_main_part(string infile, string maskfile,
 	int left_offset = -5, int right_offset = 5,
@@ -1027,10 +1019,11 @@ void process_main_part(string infile, string maskfile,
 	//get rect
 	Rect target_rect = get_contour_rect(contour);
 	//grabcut
-	Mat grabcut_result = grabcut(infile, target_rect);
-	show_image(grabcut_result, "grabcut result", True);
+	//Mat grabcut_result = grabcut(color_img, target_rect);
+	//Mat grabcut_result = extract_image_by_rect(color_img, target_rect);
+	//show_image(grabcut_result, "grabcut result", True);
 	// clip
-	Mat clip_grabcut = extract_image_by_rect(grabcut_result, target_rect,
+	Mat clip_grabcut = extract_image_by_rect(color_img, target_rect,
 		left_offset = left_offset, right_offset = right_offset,
 		top_offset = top_offset, bottom_offset = bottom_offset);
 	show_image(clip_grabcut, "clip result", True);
@@ -1080,7 +1073,7 @@ void process_main_part(string infile, string maskfile,
 	Mat target2 = extract_target(clone_clip_grabcut);
 	show_image(target2, "target2", True);
 
-	Mat clip_target2 = clip_target(target2, best_match_rect);
+	Mat clip_target2 = clip_Mat_by_rect(target2, best_match_rect);
 	show_image(clip_target2, "clip target2", True);
 
 	Mat draw_img = make_draw_img(clip_target2);
@@ -1232,10 +1225,10 @@ void draw_on_origin(Mat image, vector<Rect> matched_rects, vector<Rect> miss_rec
 
 bool run(string infile, string mask,string outfile = "")
 {
-	int left_offset = -5,
-		right_offset = 5,
-		top_offset = -5,
-		bottom_offset = 5;
+	int left_offset = 0,
+		right_offset = 0,
+		top_offset = 0,
+		bottom_offset = 0;
 
 	vector<Rect> template_rects;
 	vector<Rect> matched_rects;

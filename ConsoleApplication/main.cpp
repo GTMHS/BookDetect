@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 	//
 
 	string imgs_dir = "G:/20181203/imgs";
-	//imgs_dir = "E:\\My Projects\\Python\\bookdetecting\\09-27\\往事";
+	imgs_dir = "E:\\My Projects\\Python\\bookdetecting\\09-27\\往事";
 	//imgs_dir = "G:\\20181203\\ConsoleApplication\\ConsoleApplication\\12-06";
 	vector<string> files;
 	getAllFiles(imgs_dir, files);
@@ -62,6 +62,7 @@ int main(int argc, char* argv[])
 	const int count = files.size();
 	for (int i = 0; i < count; i++) {
 		filename = files[i];
+		outfile = filename + "_ret.jpg";
 		//计时结果
 		double timems = 0;
 		//运行检测算法
