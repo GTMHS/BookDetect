@@ -362,104 +362,6 @@ double __match_contour(vector<Point> contour, Shape mask_shape)
 	return value;
 }
 
-vector<Point> find_max_contour(vector<vector<Point>> contours, Shape mask_shape, int *idx)
-{
-	const int size = contours.size();
-	double min_value = 0.0, value = 0.0;
-	int index = 0;
-	for (int i = 0; i < size; i++){
-		vector<Point> con = contours[i];
-		value = __match_contour(con, mask_shape);
-		if (i == 0){
-			min_value = value;
-		}
-		else
-		{
-			if (min_value > value){
-				min_value = value;
-				index = i;
-			}
-		}
-	}
-
-	*idx = index;
-
-	return contours[index];
-}
-
-vector<Point> extract_best_match_contour(Mat img, Shape mask_shape)
-{
-	Mat thresh3;
-	try
-	{
-		threshold(img, thresh3, 127, 255, THRESH_TRUNC);
-	}
-	catch (cv::Exception &e)
-	{
-		throw MyException("threshold", 395);
-	}
-	Mat kernel = getStructuringElement(MORPH_RECT, Size(3, 3));
-	Mat dilated;
-	try
-	{
-		dilate(thresh3, dilated, kernel, cv::Point(-1, -1), 1);
-	}
-	catch (cv::Exception &e)
-	{
-		throw MyException("dilate", 405);
-	}
-	Mat binary;
-	int th = int(_Thresholds.binary_threshold);
-	try
-	{
-		threshold(dilated, binary, th, 255, THRESH_BINARY);
-	}
-	catch (cv::Exception &e)
-	{
-		throw MyException("dilate", 415);
-	}
-	show_image(binary, "dilate", True);
-	binary = denoise_2d(binary, 0);
-	show_image(binary, "denoised binary", True);
-	vector<vector<Point>> contours = extract_contours(binary);
-	vector<Point> max_contour = find_max_contour(contours, mask_shape, &th);
-
-	return max_contour;
-}
-
-Rect get_contour_rect(vector<Point> contour)
-{
-	Rect rect;
-	try
-	{
-		rect = boundingRect(contour);
-	}
-	catch (cv::Exception &e)
-	{
-		throw MyException("boundingRect", 435);
-	}
-	return rect;
-}
-
-Mat grabcut(Mat img, Rect rect)
-{
-	//Mat img = imread(filename, 1);
-	Mat bgModel, fgModel;
-	Mat result;
-	try
-	{
-		grabCut(img, result, rect, bgModel, fgModel, 1, GC_INIT_WITH_RECT);
-	}
-	catch (cv::Exception &e)
-	{
-		throw MyException("grabCut", 451);
-	}
-	result = result & 1;
-	Mat foreGround(img.size(), CV_8UC3, cv::Scalar(0, 0, 0));
-	img.copyTo(foreGround, result);
-	return foreGround;
-}
-
 Mat clip_Mat_by_rect(Mat mat, Rect rect)
 {
 	IplImage* p_img = &IplImage(mat);
@@ -471,25 +373,6 @@ Mat clip_Mat_by_rect(Mat mat, Rect rect)
 	Mat ret = temp_img.clone();
 	cvReleaseImage(&newImg);
 	return ret;
-}
-
-Mat extract_image_by_rect(Mat img, Rect rect, int left_offset = 0, int right_offset = 0,
-	int top_offset = 0, int bottom_offset = 0)
-{
-	int x = rect.x, y = rect.y, w = rect.width, h = rect.height;
-	int new_h = h + bottom_offset - top_offset, new_w = w + right_offset - left_offset;
-	//Mat ret = Mat::zeros(new_h, new_w, img.type());
-
-	rect.x += left_offset;
-	rect.y += top_offset;
-	rect.width = new_w;
-	rect.height = new_h;
-
-	Mat ret = clip_Mat_by_rect(img, rect);
-
-	show_image(ret, "482", True);
-	Mat ret2 = to_gray(ret);
-	return ret2;
 }
 
 Mat fill_seed(Mat img, Point seed, CvScalar color, Mat *_mask, int threshold = 10)
@@ -1034,7 +917,7 @@ void process_main_part(string infile, string maskfile,
 
 	Rect target_rect = cvRect(min_loc.x, min_loc.y, mask.cols, mask.rows);
 
-	Mat clip_grabcut =  clip_Mat_by_rect(color_img, target_rect);
+	Mat clip_grabcut =  clip_Mat_by_rect(gray_img, target_rect);
 
 	show_image(clip_grabcut, "clip result", True);
 	Mat for_draw_result = clip_grabcut.clone();
