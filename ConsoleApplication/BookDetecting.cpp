@@ -14,8 +14,8 @@ typedef struct Shape
 
 void default_globals()
 {
-	_Globals.wait_key = False;
-	_Globals.show_process = False;
+	_Globals.wait_key = True;
+	_Globals.show_process = True;
 	_Globals.in_folder = "";
 	_Globals.out_folder = "";
 	_Globals.mask_file = "";
@@ -695,7 +695,7 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 		//width = where[1].max() - where[1].min() + 1
 		//height = where[0].max() - where[0].min() + 1
 
-		//TODO replace
+		// replace
 		int j, k;
 		int start_w, end_w;
 		int start_h, end_h;
@@ -1014,20 +1014,30 @@ void process_main_part(string infile, string maskfile,
 	show_image(color_img, "origin", True);
 	Mat gray_img;
 	cvtColor(color_img, gray_img, CV_BGR2GRAY);
-	//find contour
-	vector<Point> contour = extract_best_match_contour(gray_img, mask_shape);
-	//get rect
-	Rect target_rect = get_contour_rect(contour);
-	//grabcut
-	//Mat grabcut_result = grabcut(color_img, target_rect);
-	//Mat grabcut_result = extract_image_by_rect(color_img, target_rect);
-	//show_image(grabcut_result, "grabcut result", True);
-	// clip
-	Mat clip_grabcut = extract_image_by_rect(color_img, target_rect,
-		left_offset = left_offset, right_offset = right_offset,
-		top_offset = top_offset, bottom_offset = bottom_offset);
+
+	Mat mask_255 = Mat::zeros(mask.rows, mask.cols, CV_8U);
+	Mat temp_mask;
+	fill_seed(mask_255, cvPoint(1, 1), cvScalar(255, 255, 255), &temp_mask);
+	show_image(mask_255, "mask 255");
+
+	Mat result = match_with_template(gray_img, mask_255);
+	double min_val, max_val;
+	Point min_loc, max_loc;
+	try
+	{
+		minMaxLoc(result, &min_val, &max_val, &min_loc, &max_loc);
+	}
+	catch (cv::Exception &e)
+	{
+		throw MyException("minMaxLoc", 656);
+	}
+
+	Rect target_rect = cvRect(min_loc.x, min_loc.y, mask.cols, mask.rows);
+
+	Mat clip_grabcut =  clip_Mat_by_rect(color_img, target_rect);
+
 	show_image(clip_grabcut, "clip result", True);
-	Mat for_draw_result = clip_grabcut.clone();											//1607
+	Mat for_draw_result = clip_grabcut.clone();
 	try
 	{
 		threshold(clip_grabcut, clip_grabcut,100, 255, THRESH_TOZERO);
