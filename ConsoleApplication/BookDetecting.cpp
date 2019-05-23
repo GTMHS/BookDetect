@@ -20,8 +20,8 @@ typedef struct Shape
 
 void default_globals()
 {
-	_Globals.wait_key = False;
-	_Globals.show_process = False;
+	_Globals.wait_key = True;
+	_Globals.show_process = True;
 	_Globals.in_folder = "";
 	_Globals.out_folder = "";
 	_Globals.mask_file = "";
@@ -1002,18 +1002,23 @@ void process_main_part(string infile, string maskfile,
 
 	show_image(clip_grabcut, "clip result 3", True);
 
-	//fill 4 corners
-	CvScalar color = cvScalar(255, 255, 255);
-	Mat filled_img = fill_4corners(clip_grabcut, top_offset = 0, bottom_offset = 0, color, 10);
-	show_image(filled_img, "filled 4 corners", True);
+	threshold(clip_grabcut, clip_grabcut, 1, 255, THRESH_BINARY_INV);
 
-	medianBlur(filled_img, filled_img, 3);
+	show_image(clip_grabcut, "clip result 31", True);
 
-	//extract target
-	Mat target = extract_target(filled_img);
-	show_image(target, "target", True);
+	Mat filled_img;
+	////fill 4 corners
+	//CvScalar color = cvScalar(255, 255, 255);
+	//Mat filled_img = fill_4corners(clip_grabcut, top_offset = 0, bottom_offset = 0, color, 10);
+	//show_image(filled_img, "filled 4 corners", True);
 
-	Rect best_match_rect = mask_matches_target(processed_mask, target);
+	medianBlur(clip_grabcut, filled_img, 3);
+
+	////extract target
+	//Mat target = extract_target(filled_img);
+	//show_image(target, "target", True);
+
+	Rect best_match_rect = mask_matches_target(processed_mask, filled_img);
 
 	clone_clip_grabcut = fill_rect_bound(clone_clip_grabcut, best_match_rect);
 	show_image(clone_clip_grabcut, "clone clip grabcut", True);
