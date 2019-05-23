@@ -1,10 +1,16 @@
 #include "BookDetecting.h"
+#include "readconf.h"
 
 #define MISS_COLOR Vec3b(255, 0, 255)
 #define ABNORMAL_COLOR Vec3b(0, 0, 255)
 #define NORMAL_COLOR Vec3b(0, 255, 0)
 #define WHITE_COLOR Vec3b(255, 255, 255)
 #define BLACK_COLOR Vec3b(0, 0, 0)
+
+// 全局配置
+static Globals _Globals;
+// 全局阈值
+static Thresholds _Thresholds;
 
 typedef struct Shape
 {
@@ -14,20 +20,30 @@ typedef struct Shape
 
 void default_globals()
 {
-	_Globals.wait_key = True;
-	_Globals.show_process = True;
+	_Globals.wait_key = False;
+	_Globals.show_process = False;
 	_Globals.in_folder = "";
 	_Globals.out_folder = "";
 	_Globals.mask_file = "";
 }
 
-void default_thresholds()
+//void default_thresholds()
+//{
+//	_Thresholds.binary_threshold = 80;
+//	_Thresholds.max_difference_ratio = 0.5;
+//	_Thresholds.ignore_left_right_ratio = 0.15;
+//	_Thresholds.ignore_top_bottom_ratio = 0.2;
+//	_Thresholds.min_nonzero_pixel_ratio = 0.5;
+//}
+
+void read_thresholds(string filename)
 {
-	_Thresholds.binary_threshold = 80;
-	_Thresholds.max_difference_ratio = 0.5;
-	_Thresholds.ignore_left_right_ratio = 0.15;
-	_Thresholds.ignore_top_bottom_ratio = 0.2;
-	_Thresholds.min_nonzero_pixel_ratio = 0.5;
+	float *arr = read_config(filename);
+	_Thresholds.binary_threshold = arr[0];
+	_Thresholds.max_difference_ratio = arr[1];
+	_Thresholds.ignore_left_right_ratio = arr[2];
+	_Thresholds.ignore_top_bottom_ratio = arr[3];
+	_Thresholds.min_nonzero_pixel_ratio = arr[4];
 }
 
 int cvErrorRedirector(int status, const char * func_name, const char * err_msg, const char * file_name, int line, void * userdata)
@@ -51,13 +67,17 @@ vector<vector<Point> > extract_contours(Mat binary_img)
 {
 	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
+	if (binary_img.empty() || binary_img.channels() != 1)
+	{
+		throw MyException("Image is empty.", 72);
+	}
 	try
 	{
 		findContours(binary_img, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("findContours", 56);
+		throw MyException("findContours", 72);
 	}
 	return contours;
 }
@@ -67,7 +87,7 @@ Mat read_mask(String maskfile, int channels = 3)
 	Mat mask = imread(maskfile);
 	if (mask.empty())
 	{
-		throw MyException("imread", 67, "Mask is empty");
+		throw MaskException();
 	}
 	Mat mask2;
 
@@ -209,7 +229,7 @@ void draw_text(Mat image, String text, Point pos)
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("putText", 208);
+		throw MyException("putText", 224);
 	}
 }
 
@@ -222,42 +242,49 @@ void __draw_text(Mat color_image, String text, vector<Point> contour)
 
 void draw_contour(Mat color_img, vector<Point> contour, CvScalar color, String text = "", bool filled = True)
 {
-	int flag = filled ? 3 : 1;
+	int flag = filled == True ? 3 : 1;
 	vector<vector<Point>> contours;
 	contours.push_back(contour);
+	if (color_img.empty())
+	{
+		throw MyException("Image is empty", 250);
+	}
 	try
 	{
 		drawContours(color_img, contours, 0, color, flag);
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("drawContours", 230);
+		throw MyException("drawContours", 258);
 	}
-	if (text != ""){
+	if (text != "") {
 		Rect rect = boundingRect(contour);
 		Point pos = Point(rect.x, rect.y + rect.height + 50);
 		draw_text(color_img, text, pos);
 	}
 }
 
-void draw_contours(Mat color_img, vector<vector<Point>> contours, Vec3b color = Vec3b(0, 0, 255),
-	bool random_color = False, bool show_index = False)
+void draw_contours(Mat color_img, vector<vector<Point>> contours, Vec3b color = Vec3b(0, 0, 255), bool random_color = False, bool show_index = False)
 {
+	if (contours.empty())
+	{
+		throw MyException("Contours are empty", 268);
+	}
 	const int count = contours.size();
 	for (int i = 0; i < count; i++)
 	{
-		vector<Point> contour = contours[i];
-		if (random_color)
+		vector<Point> contour = contours.at(i);
+		if (random_color == True)
 		{
 			color[0] = rand() % 256;
 			color[1] = rand() % 256;
 			color[2] = rand() % 256;
 		}
 		draw_contour(color_img, contour, color);
-		if (show_index)
+		if (show_index == True)
 		{
 			char s[100];
-			_itoa(i, s, 10);
+			_itoa_s(i, s, 10);
 			__draw_text(color_img, s, contour);
 		}
 	}
@@ -301,13 +328,10 @@ void show_mask(string filename)
 Mat read_image(string infile, int color_mode = 0)
 {
 	Mat img;
-	try
+	img = imread(infile, color_mode);
+	if (img.empty())
 	{
-		img = imread(infile, color_mode);
-	}
-	catch (cv::Exception &e)
-	{
-		throw MyException("imread", 306);
+		throw MyException("read_image", 320, "Failed to read image");
 	}
 	return img;
 }
@@ -320,7 +344,7 @@ void write_image(Mat img, string outfile)
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("imwrite", 319);
+		throw MyException("imwrite", 332);
 	}
 }
 
@@ -357,22 +381,9 @@ double __match_contour(vector<Point> contour, Shape mask_shape)
 	}
 	catch (Exception &e)
 	{
-		throw MyException("__match_contour", 355);
+		throw MyException("__match_contour", 360);
 	}
 	return value;
-}
-
-Mat clip_Mat_by_rect(Mat mat, Rect rect)
-{
-	IplImage* p_img = &IplImage(mat);
-	IplImage *newImg = cvCreateImage(cvSize(rect.width, rect.height), p_img->depth, p_img->nChannels);
-	cvSetImageROI(p_img, rect);
-	cvCopy(p_img, newImg);
-	cvResetImageROI(p_img);
-	Mat temp_img = cvarrToMat(newImg);
-	Mat ret = temp_img.clone();
-	cvReleaseImage(&newImg);
-	return ret;
 }
 
 Mat fill_seed(Mat img, Point seed, CvScalar color, Mat *_mask, int threshold = 10)
@@ -389,7 +400,7 @@ Mat fill_seed(Mat img, Point seed, CvScalar color, Mat *_mask, int threshold = 1
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("floodFill", 500);
+		throw MyException("floodFill", 522);
 	}
 	*_mask = mask;
 	return img;
@@ -419,7 +430,7 @@ Mat extract_target(Mat img)
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("threshold", 530);
+		throw MyException("threshold", 552);
 	}
 	return thresh;
 }
@@ -433,7 +444,7 @@ void draw_rect(Mat img, int x, int y, int w, int h, CvScalar color = cvScalar(25
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("rectangle", 544);
+		throw MyException("rectangle", 566);
 	}
 	if (text != ""){
 		Point pos = Point(x, y + h + 30);
@@ -457,7 +468,7 @@ Mat match_with_template(Mat img, Mat _template, int method = TM_SQDIFF)
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("matchTemplate", 568);
+		throw MyException("matchTemplate", 590);
 	}
 	return result;
 }
@@ -483,17 +494,17 @@ void find_minmax_width_and_height(vector<Rect> rects, int *minw, int *maxw,
 	const int size = rects.size();
 	if (size == 0)
 	{
-		throw MyException("", 595, "Size of rects equals 0.");
+		throw MyException("find_minmax_width_and_height", 614, "Size of rects equals 0.");
 	}
 	std::sort(rects.begin(), rects.end(), compare_by_width);
-	*minw = rects[0].width, *maxw = rects[size - 1].width;
+	*minw = rects.at(0).width, *maxw = rects.at(size - 1).width;
 
 	std::sort(rects.begin(), rects.end(), compare_by_height);
-	*minh = rects[0].height, *maxh = rects[size - 1].height;
+	*minh = rects.at(0).height, *maxh = rects.at(size - 1).height;
 
 	std::sort(rects.begin(), rects.end(), compare_by_area);
-	*min_area = rects[0].width * rects[0].height;
-	*max_area = rects[size - 1].width * rects[size - 1].height;
+	*min_area = rects.at(0).width * rects.at(0).height;
+	*max_area = rects.at(size - 1).width * rects.at(size - 1).height;
 }
 
 Mat process_left(Mat left_target, vector<Rect> matched_rects,
@@ -508,7 +519,7 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("medianBlur", 619);
+		throw MyException("medianBlur", 641);
 	}
 	Mat draw_img = make_draw_img(left_target);
 	Mat cloned_draw_img = draw_img.clone();
@@ -528,7 +539,7 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 
 	const int size = matched_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = matched_rects[i];
+		rect = matched_rects.at(i);
 		x = rect.x, y = rect.y, w = rect.width, h = rect.height;
 		Mat template_ = Mat::zeros(h, w, CV_8U);
 		for (int j = 0; j < h; j++){
@@ -545,7 +556,7 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 		}
 		catch (cv::Exception &e)
 		{
-			throw MyException("minMaxLoc", 656);
+			throw MyException("minMaxLoc", 678);
 		}
 		int sum = 0;
 
@@ -578,7 +589,7 @@ Mat process_left(Mat left_target, vector<Rect> matched_rects,
 		//width = where[1].max() - where[1].min() + 1
 		//height = where[0].max() - where[0].min() + 1
 
-		// replace
+		//TODO replace
 		int j, k;
 		int start_w, end_w;
 		int start_h, end_h;
@@ -688,7 +699,7 @@ double match_shapes(Rect rect, Rect template_rect, int method = CV_CONTOURS_MATC
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("matchShapes", 799);
+		throw MyException("matchShapes", 821);
 	}
 	return value;
 }
@@ -706,7 +717,7 @@ vector<double> __match_rects(Rect rect, vector<Rect> template_rects, int method 
 	vector<double> ret;
 	const int size = template_rects.size();
 	for (int i = 0; i < size; i++){
-		Rect trect = template_rects[i];
+		Rect trect = template_rects.at(i);
 		double value = match_shapes(rect, trect, method);
 		ret.push_back(value);
 	}
@@ -719,7 +730,7 @@ vector<int> __detect_algorithm(vector<vector<Point>> contours, vector<Rect> matc
 	const int size = contours.size();
 	vector<int> indexes;
 	for (int i = 0; i < size; i++){
-		Rect bounding_rect = boundingRect(contours[i]);
+		Rect bounding_rect = boundingRect(contours.at(i));
 		if (!__is_rect_center(bounding_rect, top, bottom, left, right)) continue;
 		vector<double> ret = __match_rects(bounding_rect, matched_rects);
 		vector<double>::iterator minimum = min_element(std::begin(ret), std::end(ret));
@@ -733,15 +744,19 @@ vector<Rect> detect_if_abnormal_of_left_image(Mat left_image, vector<Rect> match
 	double ignore_left_right_ratio = 0.1,
 	double ignore_top_bottom_ratio = 0.1)
 {
+	vector<Rect> abnormal_rect;
 	Mat left_img_gray = to_gray(left_image);
 	vector<vector<Point>> contours = extract_contours(left_img_gray);
+	if (contours.empty()) {
+		return abnormal_rect;
+	}
+
 	Mat draw_image = make_draw_img(left_image);
 
 	draw_contours(draw_image, contours, Vec3b(0, 0, 255), True, True);
 	show_image(draw_image, "left contours", True);
 
 	Mat abnormal_draw_image = make_draw_img(left_image);
-	vector<Rect> abnormal_rect;
 
 	int image_h = left_image.rows, image_w = left_image.cols;
 
@@ -754,10 +769,10 @@ vector<Rect> detect_if_abnormal_of_left_image(Mat left_image, vector<Rect> match
 		max_difference_ratio, top, bottom, left, right);
 
 	const int size = indexes.size();
-	for (int i = 0; i < size; i++){
-		draw_contour_rect(abnormal_draw_image, 
-			contours[indexes[i]], cvScalar(0, 0, 255), 1, "Abnormal");
-		abnormal_rect.push_back(boundingRect(contours[indexes[i]]));
+	for (int i = 0; i < size; i++) {
+		draw_contour_rect(abnormal_draw_image,
+			contours.at(indexes.at(i)), cvScalar(0, 0, 255), 1, "Abnormal");
+		abnormal_rect.push_back(boundingRect(contours.at(indexes.at(i))));
 	}
 
 	show_image(abnormal_draw_image, "abnormal draw image", True);
@@ -776,9 +791,13 @@ vector<Rect> find_mask_rects(Mat mask)
 	vector<vector<Point>> contours = extract_contours(cloned);
 
 	vector<Rect> ret;
+	if (contours.empty())
+	{
+		throw MyException("Contours are empty.", 792);
+	}
 	const int size = contours.size();
 	for (int i = 0; i < size; i++){
-		Rect rect = boundingRect(contours[i]);
+		Rect rect = boundingRect(contours.at(i));
 		ret.push_back(rect);
 	}
 	return ret;
@@ -799,7 +818,7 @@ Rect mask_matches_target(Mat mask, Mat target) {
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("minMaxLoc", 910);
+		throw MyException("minMaxLoc", 932);
 	}
 	// print(min_val, max_val, min_loc, max_loc)
 	// best match, green
@@ -870,6 +889,34 @@ Mat fill_rect_bound(Mat gray, Rect rect, int color = 255){								//////////////
 	return gray;
 }
 
+Mat clip_Mat_by_rect(Mat mat, Rect rect)
+{
+	IplImage* p_img = &IplImage(mat);
+	IplImage *newImg = cvCreateImage(cvSize(rect.width, rect.height), p_img->depth, p_img->nChannels);
+	cvSetImageROI(p_img, rect);
+	cvCopy(p_img, newImg);
+	cvResetImageROI(p_img);
+	Mat temp_img = cvarrToMat(newImg);
+	Mat ret = temp_img.clone();
+	cvReleaseImage(&newImg);
+	return ret;
+}
+
+int count_pixels(Mat img, int threshold = 0)
+{
+	int w = img.cols, h = img.rows;
+
+	int sum = 0;
+	for (int j = 0; j < h; j++) {
+		for (int k = 0; k < w; k++)
+		{
+			if (img.ptr(j)[k] > threshold) {
+				sum += 1;
+			}
+		}
+	}
+	return sum;
+}
 
 void process_main_part(string infile, string maskfile,
 	int left_offset = -5, int right_offset = 5,
@@ -886,9 +933,7 @@ void process_main_part(string infile, string maskfile,
 	//read mask
 	Mat mask = read_mask(maskfile, 1);
 	show_image(mask, "mask", True);
-	Shape mask_shape = { mask.cols, mask.rows };														//				
-
-	//process mask
+	Shape mask_shape = { mask.cols, mask.rows };
 	Mat processed_mask = process_mask(mask);
 	show_image(processed_mask, "processed mask", True);
 
@@ -917,13 +962,24 @@ void process_main_part(string infile, string maskfile,
 
 	Rect target_rect = cvRect(min_loc.x, min_loc.y, mask.cols, mask.rows);
 
-	Mat clip_grabcut =  clip_Mat_by_rect(gray_img, target_rect);
+	//long min_value = result.ptr(min_loc.y)[min_loc.x];
+
+	//if (min_value > 215.0)
+	//{
+	//	throw MyException("Invalid Image", 952);
+	//}
+
+	Mat clip_grabcut = clip_Mat_by_rect(gray_img, target_rect);
+
+	//// 判断匹配像素是否有效
+	//int pixel_count = count_pixels(clip_grabcut);
+
 
 	show_image(clip_grabcut, "clip result", True);
 	Mat for_draw_result = clip_grabcut.clone();
 	try
 	{
-		threshold(clip_grabcut, clip_grabcut,100, 255, THRESH_TOZERO);
+		threshold(clip_grabcut, clip_grabcut, 100, 255, THRESH_TOZERO);
 	}
 	catch (cv::Exception &e)
 	{
@@ -932,14 +988,14 @@ void process_main_part(string infile, string maskfile,
 	show_image(clip_grabcut, "clip result 2", True);
 
 
-	for (int j = 0; j < clip_grabcut.rows; j++){
-		for (int k = 0; k < clip_grabcut.cols; k++){
+	for (int j = 0; j < clip_grabcut.rows; j++) {
+		for (int k = 0; k < clip_grabcut.cols; k++) {
 			if (clip_grabcut.ptr(j)[k] > 0)
 				clip_grabcut.ptr(j)[k] = 255;
 		}
 	}
 
-	//clip_grabcut[clip_grabcut > 0] = 255;												//
+	//clip_grabcut[clip_grabcut > 0] = 255;	
 
 	//clone for draw rect
 	Mat clone_clip_grabcut = clip_grabcut.clone();
@@ -950,6 +1006,8 @@ void process_main_part(string infile, string maskfile,
 	CvScalar color = cvScalar(255, 255, 255);
 	Mat filled_img = fill_4corners(clip_grabcut, top_offset = 0, bottom_offset = 0, color, 10);
 	show_image(filled_img, "filled 4 corners", True);
+
+	medianBlur(filled_img, filled_img, 3);
 
 	//extract target
 	Mat target = extract_target(filled_img);
@@ -978,22 +1036,22 @@ void process_main_part(string infile, string maskfile,
 	int x, y, w, h;
 	CvScalar draw_color;
 	Mat _mask;
-	for (int i = 0; i < size; i++){
-		Rect rect = rects[i];
+	for (int i = 0; i < size; i++) {
+		Rect rect = rects.at(i);
 		template_rects.push_back(rect);
 		x = rect.x, y = rect.y, w = rect.width, h = rect.height;
 		//Mat roi = Mat::zeros(h, w, clip_target2.type());
 
 		int sum = 0;
-		for (int j = 0; j < h; j++){
+		for (int j = 0; j < h; j++) {
 			for (int k = 0; k < w; k++)
 			{
-				if (clip_target2.ptr(j + y)[k + x] > 0){
+				if (clip_target2.ptr(j + y)[k + x] > 0) {
 					sum += 1;
 				}
 			}
 		}
-		if (sum > 0){
+		if (sum > 0) {
 			matched_rects.push_back(rect);
 			draw_color = NORMAL_COLOR;
 
@@ -1007,7 +1065,7 @@ void process_main_part(string infile, string maskfile,
 			target2 = fill_seed(target2, Point(x + bx, y + by), cvScalar(0, 0, 0), &_mask);
 			show_image(target2, "target2", True);
 		}
-		else{
+		else {
 			miss_rects.push_back(rect);
 			miss_flag += 1;
 			draw_color = MISS_COLOR;
@@ -1043,7 +1101,7 @@ void draw_decision_text(Mat image, bool decision)
 	}
 	catch (cv::Exception &e)
 	{
-		throw MyException("putText", 1156);
+		throw MyException("putText", 1176);
 	}
 }
 
@@ -1057,7 +1115,7 @@ void draw_result(Rect best_match_rect, vector<Rect> matched_rects, vector<Rect> 
 	//matched
 	int size = matched_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = matched_rects[i];
+		rect = matched_rects.at(i);
 		draw_rect(draw_image, bx + rect.x,
 			by + rect.y, rect.width, rect.height,
 			normal_color, line_width);
@@ -1065,7 +1123,7 @@ void draw_result(Rect best_match_rect, vector<Rect> matched_rects, vector<Rect> 
 	//miss
 	size = miss_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = miss_rects[i];
+		rect = miss_rects.at(i);
 		draw_rect(draw_image, bx + rect.x,
 			by + rect.y, rect.width, rect.height,
 			miss_color, line_width);
@@ -1073,7 +1131,7 @@ void draw_result(Rect best_match_rect, vector<Rect> matched_rects, vector<Rect> 
 	//abnormal
 	size = abnormal_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = abnormal_rects[i];
+		rect = abnormal_rects.at(i);
 		draw_rect(draw_image, bx + rect.x,
 			by + rect.y, rect.width, rect.height,
 			abnormal_color, line_width);
@@ -1092,7 +1150,7 @@ void draw_on_origin(Mat image, vector<Rect> matched_rects, vector<Rect> miss_rec
 	//matched
 	int size = matched_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = matched_rects[i];
+		rect = matched_rects.at(i);
 		draw_rect(image, bx + rect.x + tx + left_offset,
 			by + rect.y + ty + top_offset, rect.width, rect.height,
 			normal_color, line_width);
@@ -1100,7 +1158,7 @@ void draw_on_origin(Mat image, vector<Rect> matched_rects, vector<Rect> miss_rec
 	//miss
 	size = miss_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = miss_rects[i];
+		rect = miss_rects.at(i);
 		draw_rect(image, bx + rect.x + tx + left_offset,
 			by + rect.y + ty + top_offset, rect.width, rect.height,
 			miss_color, line_width);
@@ -1108,7 +1166,7 @@ void draw_on_origin(Mat image, vector<Rect> matched_rects, vector<Rect> miss_rec
 	//abnormal
 	size = abnormal_rects.size();
 	for (int i = 0; i < size; i++){
-		rect = abnormal_rects[i];
+		rect = abnormal_rects.at(i);
 		draw_rect(image, bx + rect.x + tx + left_offset,
 			by + rect.y + ty + top_offset, rect.width, rect.height,
 			abnormal_color, line_width);
@@ -1118,10 +1176,10 @@ void draw_on_origin(Mat image, vector<Rect> matched_rects, vector<Rect> miss_rec
 
 bool run(string infile, string mask,string outfile = "")
 {
-	int left_offset = 0,
-		right_offset = 0,
-		top_offset = 0,
-		bottom_offset = 0;
+	int left_offset = -5,
+		right_offset = 5,
+		top_offset = -5,
+		bottom_offset = 5;
 
 	vector<Rect> template_rects;
 	vector<Rect> matched_rects;
@@ -1222,9 +1280,20 @@ int bookDetecting(string filename, string maskfile, string outfile, bool verbose
 	}
 	catch (MyException &e)
 	{
-		if (verbose)
-			std::cout << e.what();
+		if (verbose) {
+			std::cout << e.what() << "\t Line " << e.lineno();
+		}
 	}
+
+	catch (MaskException &e)
+	{
+		if (verbose)
+		{
+			std::cout << "Failed to read mask file." << std::endl;
+		}
+		ret = -2;
+	}
+	
 	catch (cv::Exception &e)
 	{
 		if (verbose)
@@ -1232,11 +1301,17 @@ int bookDetecting(string filename, string maskfile, string outfile, bool verbose
 			std::cout << e.what();
 		}
 	}
+	catch(...)
+	{
+		;
+	}
 
 	if (timing){
 		QueryPerformanceCounter(&freq_num);
 		end_time = freq_num.QuadPart;
-		*time_ms =  (end_time - start_time) * 1000 / (freq *  1.0);
+		if (time_ms != 0) {
+			*time_ms = (end_time - start_time) * 1000 / (freq *  1.0);
+		}
 	}
 	return ret;
 }

@@ -40,15 +40,18 @@ typedef struct Thresholds
 }Thresholds;
 
 // 全局配置
-static Globals _Globals;
+//static Globals _Globals;
 // 全局阈值
-static Thresholds _Thresholds;
+//static Thresholds _Thresholds;
 
 // 默认全局配置
 void default_globals();
 
-// 默认阈值
-void default_thresholds();
+//// 默认阈值
+//void default_thresholds();
+
+//从文件读取阈值
+void read_thresholds(string filename);
 
 //重定向opencv的错误输出
 int cvErrorRedirector(int status, const char* func_name, const char* err_msg,
@@ -63,7 +66,7 @@ int cvErrorRedirector(int status, const char* func_name, const char* err_msg,
  * 则输出异常信息，默认为False
  * @param[in] timing, 是否计时，默认为False
  * @param[out] time_ms，计时结果指针，单位为ms，如果timing为True，该参数必须指定
- * @return 0表示正常，1表示异常，-1表示算法运行异常
+ * @return 0表示正常，1表示异常，-1表示算法运行异常，-2表示读取模板失败
  * @note 在运行该算法之前，必须先设置_Globals和_Thresholds，
  * 若不知道如何设置，可使用default_globals()和default_thresholds()设置
  */

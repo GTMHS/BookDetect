@@ -19,9 +19,18 @@ public:
 	{
 		return _exception.c_str();
 	}
+	const int lineno() {
+		return _lineno;
+	}
 private:
 	string _funcname;
 	int _lineno;
 	string _message;
 	string _exception;
+};
+
+class MaskException : public exception
+{
+public:
+	MaskException() {};
 };
