@@ -979,7 +979,7 @@ void process_main_part(string infile, string maskfile,
 	Mat for_draw_result = clip_grabcut.clone();
 	try
 	{
-		threshold(clip_grabcut, clip_grabcut, 100, 255, THRESH_TOZERO);
+		threshold(clip_grabcut, clip_grabcut, int(_Thresholds.binary_threshold), 255, THRESH_TOZERO);
 	}
 	catch (cv::Exception &e)
 	{
